@@ -1,0 +1,417 @@
+
+---
+title: "Lab 7 - OLS Regression"
+author: "Sara Troshani"
+date: "2026-11-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
+
+library(ggplot2)
+library(knitr)
+library(haven)
+```
+
+## Introduction
+
+For this lab, I used the ACS 2021 couples dataset to look at whether a woman's age and education are related to the age difference between her and her husband.
+
+I chose a 6-year age difference instead of the 5 years used in the example. The dependent variable equals 1 if the husband is more than 6 years older and 0 otherwise.
+
+## Data Preparation
+
+```{r prepare, include=FALSE}
+# Load the dataset
+load("ACS2021_couples.RData")
+
+# Convert labelled variables to regular numeric values
+acs2021_couples$RELATE <- haven::zap_labels(
+  acs2021_couples$RELATE
+)
+
+acs2021_couples$h_sex <- haven::zap_labels(
+  acs2021_couples$h_sex
+)
+
+acs2021_couples$REGION <- haven::zap_labels(
+  acs2021_couples$REGION
+)
+
+# Select female spouses with male householders
+trad_data <- subset(
+  acs2021_couples,
+  as.character(SEX) == "Female" &
+    h_sex == 1 &
+    RELATE == 2
+)
+
+# Calculate age difference
+trad_data$age_diff <- trad_data$AGE - trad_data$h_age
+
+# Create dependent variable
+trad_data$he_older_6 <- as.numeric(
+  trad_data$age_diff < -6
+)
+
+# Create education dummy variables
+education <- as.character(trad_data$EDUC)
+
+trad_data$educ_hs <- as.numeric(
+  education == "Grade 12"
+)
+
+trad_data$educ_somecoll <- as.numeric(
+  education %in% c(
+    "1 year of college",
+    "2 years of college",
+    "3 years of college"
+  )
+)
+
+trad_data$educ_college <- as.numeric(
+  education == "4 years of college"
+)
+
+trad_data$educ_advdeg <- as.numeric(
+  education == "5+ years of college"
+)
+
+# Treat region as a categorical variable
+trad_data$REGION <- factor(trad_data$REGION)
+```
+
+I selected married couples with a female spouse and male householder. I used the woman's age and education first, and then added geographic region.
+
+```{r sample-table}
+sample_table <- data.frame(
+  Group = c(
+    "Husband not more than 6 years older",
+    "Husband more than 6 years older",
+    "Total"
+  ),
+  Couples = c(
+    sum(trad_data$he_older_6 == 0, na.rm = TRUE),
+    sum(trad_data$he_older_6 == 1, na.rm = TRUE),
+    nrow(trad_data)
+  )
+)
+
+kable(
+  sample_table,
+  caption = "Sample Information"
+)
+```
+
+## OLS Model 1: Age and Education
+
+I started with an OLS regression using the woman's education and current age.
+
+```{r model1, include=FALSE}
+ols_out1 <- lm(
+  he_older_6 ~ educ_hs + educ_somecoll +
+    educ_college + educ_advdeg + AGE,
+  data = trad_data
+)
+```
+
+### Regression Results
+
+```{r model1-table}
+coef1 <- coef(summary(ols_out1))
+
+model1_table <- data.frame(
+  Variable = c(
+    "Intercept",
+    "High school",
+    "Some college",
+    "College",
+    "Advanced degree",
+    "Age"
+  ),
+  Coefficient = round(coef1[, 1], 4),
+  P_Value = format.pval(
+    coef1[, 4],
+    digits = 3,
+    eps = 0.001
+  )
+)
+
+kable(
+  model1_table,
+  row.names = FALSE,
+  caption = "OLS Model 1 Results"
+)
+```
+
+**R-squared:** `r round(summary(ols_out1)$r.squared, 5)`
+
+### Interpretation
+
+The results show that all education variables have negative coefficients and are statistically significant (p < 0.001).
+
+Women with higher education levels have a lower predicted probability of having a husband more than 6 years older, compared with women with less than a high school education.
+
+For example, women with advanced degrees have an 8.53 percentage-point lower predicted probability, holding age constant.
+
+Age also has a negative coefficient. Each additional year of age is associated with about a 0.19 percentage-point decrease in the predicted probability.
+
+However, the R-squared is only 0.00985. This means age and education explain about 0.99% of the variation, which is very low.
+
+## Figure 1: Education and Age Differences
+
+```{r education-plot, fig.width=8, fig.height=4.5}
+graph_data <- data.frame(
+  educ_hs = c(0, 1, 0, 0, 0),
+  educ_somecoll = c(0, 0, 1, 0, 0),
+  educ_college = c(0, 0, 0, 1, 0),
+  educ_advdeg = c(0, 0, 0, 0, 1),
+  AGE = rep(mean(trad_data$AGE, na.rm = TRUE), 5)
+)
+
+graph_data$Probability <- predict(
+  ols_out1,
+  newdata = graph_data
+) * 100
+
+graph_data$Education <- factor(
+  c(
+    "Below HS",
+    "High School",
+    "Some College",
+    "College",
+    "Advanced"
+  ),
+  levels = c(
+    "Below HS",
+    "High School",
+    "Some College",
+    "College",
+    "Advanced"
+  )
+)
+
+ggplot(
+  graph_data,
+  aes(x = Education, y = Probability)
+) +
+  geom_col(
+    fill = "steelblue",
+    width = 0.65
+  ) +
+  geom_text(
+    aes(label = paste0(round(Probability, 1), "%")),
+    vjust = -0.5,
+    size = 4
+  ) +
+  labs(
+    title = "Education and Spousal Age Gap",
+    subtitle = "Predictions at Mean Woman's Age",
+    x = "Education Level",
+    y = "Predicted Probability (%)"
+  ) +
+  expand_limits(
+    y = max(graph_data$Probability) * 1.15
+  ) +
+  theme_minimal()
+```
+
+The graph shows that women with higher education levels have a lower predicted probability of having a husband more than 6 years older.
+
+## Figure 2: Woman's Age and Age Differences
+
+```{r age-plot, fig.width=8, fig.height=4.5}
+age_data <- data.frame(
+  AGE = 20:80,
+  educ_hs = 1,
+  educ_somecoll = 0,
+  educ_college = 0,
+  educ_advdeg = 0
+)
+
+age_data$Probability <- predict(
+  ols_out1,
+  newdata = age_data
+) * 100
+
+ggplot(
+  age_data,
+  aes(x = AGE, y = Probability)
+) +
+  geom_line(
+    color = "steelblue",
+    linewidth = 1.2
+  ) +
+  labs(
+    title = "Woman's Age and Spousal Age Gap",
+    subtitle = "Holding Education at High School",
+    x = "Woman's Age",
+    y = "Predicted Probability (%)"
+  ) +
+  theme_minimal()
+```
+
+The graph shows that as a woman's current age increases, the predicted probability of a larger age gap decreases slightly.
+
+## OLS Model 2: Adding Geographic Region
+
+Next, I added geographic region to see whether it helps explain age differences between couples.
+
+Before running the model, I expected that couples in the South might have larger age gaps, while couples in the Northeast might have smaller age gaps.
+
+```{r model2, include=FALSE}
+ols_out2 <- lm(
+  he_older_6 ~ educ_hs + educ_somecoll +
+    educ_college + educ_advdeg +
+    AGE + REGION,
+  data = trad_data
+)
+```
+
+### Regional Results
+
+```{r region-table}
+coef2 <- coef(summary(ols_out2))
+
+region_coef <- coef2[
+  grepl("^REGION", rownames(coef2)),
+  ,
+  drop = FALSE
+]
+
+region_table <- data.frame(
+  Region = rownames(region_coef),
+  Coefficient = round(region_coef[, 1], 4),
+  P_Value = format.pval(
+    region_coef[, 4],
+    digits = 3,
+    eps = 0.001
+  )
+)
+
+kable(
+  region_table,
+  row.names = FALSE,
+  caption = "Regional Coefficients"
+)
+```
+
+### Interpretation
+
+The results show that some geographic regions have statistically significant coefficients.
+
+REGION21 and REGION22 have lower predicted probabilities by approximately 2.24 and 2.51 percentage points compared with the reference region.
+
+REGION31 and REGION42 have higher predicted probabilities by approximately 1.15 and 1.40 percentage points.
+
+This suggests that geographic location is related to age differences, although not all regions are statistically significant.
+
+## Hypothesis Testing
+
+I used an ANOVA test to see whether all the region coefficients are jointly equal to zero.
+
+**H0:** All region coefficients equal zero.
+
+**H1:** At least one region coefficient is different from zero.
+
+```{r hypothesis-test}
+test <- anova(ols_out1, ols_out2)
+
+test_table <- data.frame(
+  F_Statistic = round(test$F[2], 3),
+  P_Value = format.pval(
+    test$`Pr(>F)`[2],
+    digits = 3,
+    eps = 0.001
+  )
+)
+
+kable(
+  test_table,
+  row.names = FALSE,
+  caption = "Joint F-Test for Region"
+)
+```
+
+### Interpretation
+
+The F-statistic was 66.274, with a p-value below 0.001.
+
+Since the p-value is very small, I rejected the null hypothesis.
+
+This means the region variables are jointly statistically significant and provide additional information to the model.
+
+## Comparing the Two Models
+
+```{r comparison-table}
+comparison <- data.frame(
+  Model = c("Original OLS", "OLS + Region"),
+  R_Squared = c(
+    summary(ols_out1)$r.squared,
+    summary(ols_out2)$r.squared
+  )
+)
+
+comparison$Percentage <- comparison$R_Squared * 100
+
+kable(
+  comparison[, c("Model", "R_Squared")],
+  digits = 5,
+  row.names = FALSE,
+  caption = "R-Squared Comparison"
+)
+```
+
+Adding region increased R-squared from 0.00985 to 0.01128.
+
+The model now explains about 1.13% of the variation instead of 0.99%. The improvement is small, even though region is statistically significant.
+
+## Figure 3: R-Squared Comparison
+
+```{r comparison-plot, fig.width=8, fig.height=4.5}
+ggplot(
+  comparison,
+  aes(x = Model, y = Percentage, fill = Model)
+) +
+  geom_col(width = 0.6) +
+  geom_text(
+    aes(label = paste0(round(Percentage, 3), "%")),
+    vjust = -0.5,
+    size = 4.5
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Original OLS" = "steelblue",
+      "OLS + Region" = "darkorange"
+    )
+  ) +
+  scale_y_continuous(
+    limits = c(0, 1.4),
+    breaks = seq(0, 1.4, by = 0.2),
+    labels = function(x) paste0(x, "%")
+  ) +
+  labs(
+    title = "R-Squared Before and After Adding Region",
+    x = NULL,
+    y = "Variation Explained (%)"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+The graph shows that including region improves the model slightly, but both models still explain a small percentage of the variation.
+
+## Conclusion
+
+Overall, I found that a woman's age and education are negatively related to the probability of having a husband more than 6 years older.
+
+Adding geographic region improved the model a little, and the ANOVA test showed that region is jointly statistically significant.
+
+However, both models have low R-squared values, so there are probably other factors that could help explain age differences between couples.
+
+These results show relationships between variables, but they do not necessarily mean that one variable causes the age difference.
