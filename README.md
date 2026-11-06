@@ -1,6 +1,5 @@
 # Lab 7 - OLS Regression
-
-**ECON B2000 – MA Econometrics | Fall 2026**
+**Sara Troshani**
 
 ## Introduction
 
