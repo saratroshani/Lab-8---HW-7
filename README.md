@@ -47,13 +47,15 @@ However, the R-squared is only 0.00985. This means age and education explain abo
 
 ### Figure 1: Education and Age Differences
 
-![Education and predicted probability of spousal age difference](figures/education_plot.png)
+<img width="1106" height="800" alt="image" src="https://github.com/user-attachments/assets/b134f1f3-a22c-46e6-b5ee-5850cef64df4" />
+
 
 The graph shows that women with higher education levels have a lower predicted probability of having a husband more than 6 years older.
 
 ### Figure 2: Woman's Age and Age Differences
 
-![Woman's age and predicted probability of spousal age difference](figures/age_plot.png)
+<img width="1106" height="800" alt="image" src="https://github.com/user-attachments/assets/d35890b2-52ed-4972-ac8c-32f1e892a889" />
+
 
 The graph shows that as a woman's current age increases, the predicted probability of a larger age gap decreases slightly.
 
@@ -108,7 +110,8 @@ Adding region increased R-squared from 0.00985 to 0.01128. The model now explain
 
 ### Figure 3: R-Squared Comparison
 
-![R-squared before and after adding region](figures/r_squared_comparison.png)
+<img width="1106" height="800" alt="image" src="https://github.com/user-attachments/assets/eecc9f0e-ce67-4ad7-b8d1-6edacdb7426f" />
+
 
 The graph shows that including region improves the model slightly, but both models still explain a small percentage of the variation.
 
